@@ -1,5 +1,5 @@
 const std = @import("std");
-const Chunk = @import("Chunk.zig");
+const Chunk = @import("./Chunk.zig");
 const debug = @import("./debug.zig");
 const OpCode = Chunk.OpCode;
 
