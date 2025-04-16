@@ -1,0 +1,11 @@
+.{
+    .name = .ziglox,
+    .version = "0.0.0",
+    .fingerprint = 0xd4dee9a0a0052f87,
+    .minimum_zig_version = "0.14.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
