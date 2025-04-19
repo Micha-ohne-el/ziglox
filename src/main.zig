@@ -1,9 +1,17 @@
 const std = @import("std");
+const Chunk = @import("Chunk.zig");
+const debug = @import("debug.zig");
 
 pub fn main() !void {
-    std.debug.print("Robert Nystrom is pretty {s} :)\n", .{"cool"});
-}
+    const allocator = std.heap.page_allocator;
 
-test {
-    try std.testing.expect(1 + 1 == 2);
+    var chunk: Chunk = .init(allocator);
+    defer chunk.deinit();
+
+    try chunk.writeOpCode(.op_constant, 123);
+    try chunk.writeByte(@intCast(try chunk.addConstant(.{ .float = 1.2 })), 123);
+
+    try chunk.writeOpCode(.op_return, 123);
+
+    debug.disassembleChunk(chunk, "test chunk");
 }
