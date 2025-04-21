@@ -21,7 +21,7 @@ pub fn disassembleInstruction(chunk: Chunk, offset: usize) usize {
         print("{d:4} ", .{chunk.getLine(offset)});
     }
 
-    return switch (chunk.getOpCode(offset)) {
+    return switch (chunk.read(offset).operation) {
         .op_return => simpleInstruction("OP_RETURN", offset),
         .op_constant => constantInstruction("OP_CONSTANT", chunk, offset),
         else => |code| {
@@ -37,7 +37,7 @@ fn simpleInstruction(name: []const u8, offset: usize) usize {
 }
 
 fn constantInstruction(name: []const u8, chunk: Chunk, offset: usize) usize {
-    const constant_index = chunk.getByte(offset + 1);
+    const constant_index = chunk.read(offset + 1).data;
     print("{s:<16} {d:4} '{}'\n", .{ name, constant_index, chunk.getConstant(constant_index) });
     return offset + 2;
 }

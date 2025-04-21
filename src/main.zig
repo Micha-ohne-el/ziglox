@@ -8,10 +8,10 @@ pub fn main() !void {
     var chunk: Chunk = .init(allocator);
     defer chunk.deinit();
 
-    try chunk.writeOpCode(.op_constant, 123);
-    try chunk.writeByte(@intCast(try chunk.addConstant(.{ .float = 1.2 })), 123);
+    try chunk.write(.{ .operation = .op_constant }, 123);
+    try chunk.write(.{ .data = @intCast(try chunk.addConstant(.{ .float = 1.2 })) }, 123);
 
-    try chunk.writeOpCode(.op_return, 123);
+    try chunk.write(.{ .operation = .op_return }, 123);
 
     debug.disassembleChunk(chunk, "test chunk");
 }

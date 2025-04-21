@@ -2,13 +2,18 @@ const Chunk = @This();
 const std = @import("std");
 const Value = @import("values.zig").Value;
 
-entries: std.MultiArrayList(Entry),
+code: std.ArrayListUnmanaged(Instruction),
 constants: std.ArrayListUnmanaged(Value),
+lines: std.ArrayListUnmanaged(u8),
 allocator: std.mem.Allocator,
 
-pub const Entry = struct {
-    code: u8,
-    line: usize,
+pub const Instruction = packed union {
+    operation: OpCode,
+    data: u8,
+
+    pub fn format(this: Instruction, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.formatType(@as(u8, @bitCast(this)), fmt, options, writer, 0);
+    }
 };
 
 pub const OpCode = enum(u8) {
@@ -18,32 +23,40 @@ pub const OpCode = enum(u8) {
 };
 
 pub fn init(allocator: std.mem.Allocator) Chunk {
-    return Chunk{
-        .entries = .empty,
+    var this = Chunk{
+        .code = .empty,
         .constants = .empty,
+        .lines = .empty,
         .allocator = allocator,
     };
+
+    // the very first entry is reserved (lines start at index 1):
+    this.lines.append(this.allocator, 0) catch @panic("OOM");
+
+    return this;
 }
 
 pub fn deinit(this: *Chunk) void {
-    this.entries.deinit(this.allocator);
+    this.code.deinit(this.allocator);
     this.constants.deinit(this.allocator);
+    this.lines.deinit(this.allocator);
 }
 
 pub fn count(this: Chunk) usize {
-    return this.entries.len;
+    return this.code.items.len;
 }
 
 pub fn capacity(this: Chunk) usize {
-    return this.entries.capacity;
+    return this.code.capacity;
 }
 
-pub fn writeByte(this: *Chunk, byte: u8, line: usize) !void {
-    try this.entries.append(this.allocator, .{ .code = byte, .line = line });
+pub fn write(this: *Chunk, instruction: Instruction, line: u21) !void {
+    try this.code.append(this.allocator, instruction);
+    try this.addLine(line);
 }
 
-pub fn writeOpCode(this: *Chunk, op_code: OpCode, line: usize) !void {
-    try this.writeByte(@intFromEnum(op_code), line);
+pub fn read(this: Chunk, index: usize) Instruction {
+    return this.code.items[index];
 }
 
 pub fn addConstant(this: *Chunk, value: Value) !usize {
@@ -51,18 +64,37 @@ pub fn addConstant(this: *Chunk, value: Value) !usize {
     return this.constants.items.len - 1;
 }
 
-pub fn getByte(this: Chunk, index: usize) u8 {
-    return this.entries.items(.code)[index];
-}
-
-pub fn getOpCode(this: Chunk, index: usize) OpCode {
-    return @enumFromInt(this.getByte(index));
-}
-
 pub fn getConstant(this: Chunk, index: usize) Value {
     return this.constants.items[index];
 }
 
-pub fn getLine(this: Chunk, index: usize) usize {
-    return this.entries.items(.line)[index];
+pub fn addLine(this: *Chunk, line: u21) !void {
+    var buf: [4]u8 = undefined;
+    const len = std.unicode.wtf8Encode(line, &buf) catch {
+        var b: [128]u8 = undefined;
+        @panic(std.fmt.bufPrint(&b, "Line number {d} cannot be encoded as WTF-8!", .{line}) catch "");
+    };
+    try this.lines.appendSlice(this.allocator, buf[0..len]);
+}
+
+pub fn getLine(this: Chunk, instruction_index: usize) u21 {
+    var iter = std.unicode.Wtf8View.initUnchecked(this.lines.items).iterator();
+
+    _ = iter.nextCodepoint(); // skip the very first (reserved) entry.
+
+    var i: usize = 0;
+    while (iter.nextCodepoint()) |line| : (i += 1) {
+        if (instruction_index == i) return line;
+    }
+
+    var b: [128]u8 = undefined;
+    @panic(std.fmt.bufPrint(&b, "No line information found for instruction number {d}.", .{instruction_index}) catch "");
+}
+
+pub fn format(this: Chunk, _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+    try std.fmt.format(
+        writer,
+        "Chunk{{ .code = {any}, .constants = {any}, .lines = {any}}}",
+        .{ this.code.items, this.constants.items, this.lines.items },
+    );
 }
