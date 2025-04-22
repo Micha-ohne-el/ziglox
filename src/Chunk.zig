@@ -19,6 +19,11 @@ pub const Instruction = packed union {
 pub const OpCode = enum(u8) {
     op_return,
     op_constant,
+    op_add,
+    op_subtract,
+    op_multiply,
+    op_divide,
+    op_negate,
     _,
 };
 
