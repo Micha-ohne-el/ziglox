@@ -1,10 +1,13 @@
 const Chunk = @This();
 const std = @import("std");
 const Value = @import("values.zig").Value;
+const debug = @import("debug.zig");
 
 code: std.ArrayListUnmanaged(Instruction),
 constants: std.ArrayListUnmanaged(Value),
-lines: std.ArrayListUnmanaged(u8),
+lines: std.ArrayListUnmanaged(LineSegment),
+current_line: usize,
+current_line_segment_start: usize,
 allocator: std.mem.Allocator,
 
 pub const Instruction = packed union {
@@ -27,18 +30,33 @@ pub const OpCode = enum(u8) {
     _,
 };
 
+pub const LineSegment = packed struct {
+    amount: u4,
+    line_offset: u3,
+    continues: bool,
+
+    pub fn of(line_offset: u3, amount: u4) LineSegment {
+        return LineSegment{
+            .continues = false,
+            .line_offset = line_offset,
+            .amount = amount,
+        };
+    }
+
+    pub fn format(this: LineSegment, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        try std.fmt.formatType(@as(u8, @bitCast(this)), fmt, options, writer, 0);
+    }
+};
+
 pub fn init(allocator: std.mem.Allocator) Chunk {
-    var this = Chunk{
+    return Chunk{
         .code = .empty,
         .constants = .empty,
         .lines = .empty,
+        .current_line = 1,
+        .current_line_segment_start = 0,
         .allocator = allocator,
     };
-
-    // the very first entry is reserved (lines start at index 1):
-    this.lines.append(this.allocator, 0) catch @panic("OOM");
-
-    return this;
 }
 
 pub fn deinit(this: *Chunk) void {
@@ -55,9 +73,16 @@ pub fn capacity(this: Chunk) usize {
     return this.code.capacity;
 }
 
-pub fn write(this: *Chunk, instruction: Instruction, line: u21) !void {
+pub fn write(this: *Chunk, instruction: Instruction, line: usize) !void {
+    if (line < this.current_line) return error.LineNumberLowerThanPrevious;
+
     try this.code.append(this.allocator, instruction);
-    try this.addLine(line);
+    if (line == this.current_line) {
+        try this.incrementCurrentLine();
+    } else {
+        try this.addLine(line - this.current_line);
+        this.current_line = line;
+    }
 }
 
 pub fn read(this: Chunk, index: usize) Instruction {
@@ -73,23 +98,54 @@ pub fn getConstant(this: Chunk, index: usize) Value {
     return this.constants.items[index];
 }
 
-pub fn addLine(this: *Chunk, line: u21) !void {
-    var buf: [4]u8 = undefined;
-    const len = std.unicode.wtf8Encode(line, &buf) catch {
-        var b: [128]u8 = undefined;
-        @panic(std.fmt.bufPrint(&b, "Line number {d} cannot be encoded as WTF-8!", .{line}) catch "");
-    };
-    try this.lines.appendSlice(this.allocator, buf[0..len]);
+pub fn incrementCurrentLine(this: *Chunk) !void {
+    if (this.lines.items.len == 0) try this.lines.append(this.allocator, .of(0, 0));
+
+    var overflow: u1 = 1;
+    var i: usize = 0;
+    while (overflow == 1 and i < @sizeOf(usize)) : (i += 1) {
+        if (this.current_line_segment_start + i >= this.lines.items.len) {
+            this.lines.items[this.lines.items.len - 1].continues = true;
+            try this.lines.append(this.allocator, .of(0, 0));
+        }
+
+        this.lines.items[this.current_line_segment_start + i].amount, overflow = @addWithOverflow(this.lines.items[this.current_line_segment_start + i].amount, overflow);
+    }
+
+    if (overflow == 1) {
+        try this.addLine(0);
+    }
 }
 
-pub fn getLine(this: Chunk, instruction_index: usize) u21 {
-    var iter = std.unicode.Wtf8View.initUnchecked(this.lines.items).iterator();
+pub fn addLine(this: *Chunk, line_offset: usize) !void {
+    const required_bits = std.math.log2_int_ceil(usize, line_offset);
 
-    _ = iter.nextCodepoint(); // skip the very first (reserved) entry.
+    try this.lines.append(this.allocator, .of(@intCast(line_offset & 0b111), 1));
+    this.current_line_segment_start = this.lines.items.len - 1;
+    var i: std.math.Log2Int(usize) = 3;
+    while (i < required_bits) : (i += 3) {
+        this.lines.items[this.lines.items.len - 1].continues = true;
+        try this.lines.append(this.allocator, .of(@intCast((line_offset & (@as(usize, 0b111) << i)) >> i), 0));
+    }
+}
 
+pub fn getLine(this: Chunk, instruction_index: usize) usize {
+    const lines = this.lines.items;
+    var current_line: usize = 1;
+    var current_index: usize = 0;
     var i: usize = 0;
-    while (iter.nextCodepoint()) |line| : (i += 1) {
-        if (instruction_index == i) return line;
+    while (i < lines.len) : (i += 1) {
+        const start = i;
+        while (lines[i].continues) : (i += 1) {
+            if (i >= lines.len) @panic("Found continued line segment at the end of lines array!");
+
+            current_line += @as(usize, @intCast(lines[i].line_offset)) << @intCast((i - start) * 3);
+            current_index += @as(usize, @intCast(lines[i].amount)) << @intCast((i - start) * 4);
+        }
+        current_line += @as(usize, @intCast(lines[i].line_offset)) << @intCast((i - start) * 3);
+        current_index += @as(usize, @intCast(lines[i].amount)) << @intCast((i - start) * 4);
+
+        if (current_index > instruction_index) return current_line;
     }
 
     var b: [128]u8 = undefined;
