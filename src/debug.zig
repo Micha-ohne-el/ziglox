@@ -1,13 +1,18 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Chunk = @import("Chunk.zig");
 
 const stdout = std.io.getStdOut().writer();
 
 pub fn print(comptime fmt: []const u8, args: anytype) void {
+    if (builtin.mode != .Debug) return;
+
     return std.fmt.format(stdout, fmt, args) catch {};
 }
 
 pub fn disassembleChunk(chunk: Chunk, name: []const u8) void {
+    if (builtin.mode != .Debug) return;
+
     print("== {s} ==\n", .{name});
 
     var offset: usize = 0;
@@ -17,6 +22,8 @@ pub fn disassembleChunk(chunk: Chunk, name: []const u8) void {
 }
 
 pub fn disassembleInstruction(chunk: Chunk, offset: usize) usize {
+    if (builtin.mode != .Debug) return 0;
+
     print("{d:04} ", .{offset});
 
     if (offset > 0 and chunk.getLine(offset) == chunk.getLine(offset - 1)) {

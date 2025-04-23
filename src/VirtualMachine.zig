@@ -28,13 +28,11 @@ pub fn new(chunk: *Chunk) VirtualMachine {
 
 pub fn run(this: *VirtualMachine) Error!void {
     while (true) {
-        if (builtin.mode == .Debug) {
-            debug.print("          ", .{});
-            for (this.stack[0..this.stack_size]) |frame| debug.print("[ {d} ]", .{frame});
-            debug.print("\n", .{});
+        debug.print("          ", .{});
+        for (this.stack[0..this.stack_size]) |frame| debug.print("[ {d} ]", .{frame});
+        debug.print("\n", .{});
 
-            _ = debug.disassembleInstruction(this.chunk.*, this.ii);
-        }
+        _ = debug.disassembleInstruction(this.chunk.*, this.ii);
 
         switch (this.read().operation) {
             .op_constant => {
