@@ -13,10 +13,6 @@ allocator: std.mem.Allocator,
 pub const Instruction = packed union {
     operation: OpCode,
     data: u8,
-
-    pub fn format(this: Instruction, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        try std.fmt.formatType(@as(u8, @bitCast(this)), fmt, options, writer, 0);
-    }
 };
 
 pub const OpCode = enum(u8) {
@@ -41,10 +37,6 @@ pub const LineSegment = packed struct {
             .line_offset = line_offset,
             .amount = amount,
         };
-    }
-
-    pub fn format(this: LineSegment, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        try std.fmt.formatType(@as(u8, @bitCast(this)), fmt, options, writer, 0);
     }
 };
 
