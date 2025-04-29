@@ -2,6 +2,7 @@ const Chunk = @This();
 const std = @import("std");
 const Value = @import("values.zig").Value;
 const debug = @import("debug.zig");
+const util = @import("util.zig");
 
 code: std.ArrayListUnmanaged(Instruction),
 constants: std.ArrayListUnmanaged(Value),
@@ -70,7 +71,7 @@ pub fn write(this: *Chunk, instruction: Instruction, line: usize) !void {
     errdefer _ = this.code.pop();
 
     if (line != this.current_line or this.lines.items.len == 0) {
-        try this.addNewLineSegment(@as(isize, @intCast(line)) - @as(isize, @intCast(this.current_line)));
+        try this.addNewLineSegment(util.i(line) - util.i(this.current_line));
     }
 
     try this.incrementCurrentLineSegment();
@@ -94,8 +95,8 @@ pub fn getLine(this: Chunk, instruction_index: usize) usize {
     var index: usize = 0;
 
     for (this.lines.items) |segment| {
-        line = @as(usize, @intCast(@as(isize, @intCast(line)) + @as(isize, @intCast(segment.offset))));
-        index = @as(usize, @intCast(@as(isize, @intCast(index)) + @as(isize, @intCast(segment.amount))));
+        line = util.u(util.i(line) + segment.offset);
+        index += segment.amount;
 
         if (index > instruction_index) return line;
     }
@@ -120,7 +121,7 @@ fn incrementCurrentLineSegment(this: *Chunk) !void {
 }
 
 fn addNewLineSegment(this: *Chunk, line_offset: isize) !void {
-    if (@as(isize, @intCast(this.current_line)) + line_offset <= 0) return error.InvalidLineOffset;
+    if (util.i(this.current_line) + line_offset <= 0) return error.InvalidLineOffset;
 
     var offset = line_offset;
     if (offset > 0) {
@@ -134,7 +135,7 @@ fn addNewLineSegment(this: *Chunk, line_offset: isize) !void {
     } else {
         try this.lines.append(this.allocator, .{ .amount = 0, .offset = 0 });
     }
-    this.current_line = @intCast(@as(isize, @intCast(this.current_line)) + line_offset);
+    this.current_line = util.u(util.i(this.current_line) + line_offset);
 }
 
 pub fn format(this: Chunk, _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
