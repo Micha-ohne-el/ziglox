@@ -7,7 +7,7 @@ const debug = @import("debug.zig");
 
 const max_stack_size = 256;
 
-chunk: *Chunk,
+chunk: ?*Chunk,
 ii: usize,
 stack: [max_stack_size]Value,
 stack_size: usize,
@@ -17,22 +17,22 @@ pub const Error = error{
     RuntimeError,
 };
 
-pub fn new(chunk: *Chunk) VirtualMachine {
-    return VirtualMachine{
-        .chunk = chunk,
-        .ii = 0,
-        .stack = undefined,
-        .stack_size = 0,
-    };
-}
+pub const empty: VirtualMachine = .{
+    .chunk = null,
+    .ii = 0,
+    .stack = undefined,
+    .stack_size = 0,
+};
 
-pub fn run(this: *VirtualMachine) Error!void {
+pub fn run(this: *VirtualMachine, chunk: *Chunk) Error!void {
+    this.chunk = chunk;
+
     while (true) {
         debug.print("          ", .{});
         for (this.stack[0..this.stack_size]) |frame| debug.print("[ {d} ]", .{frame});
         debug.print("\n", .{});
 
-        _ = debug.disassembleInstruction(this.chunk.*, this.ii);
+        _ = debug.disassembleInstruction(this.chunk.?.*, this.ii);
 
         switch (this.read().operation) {
             .op_constant => {
@@ -71,11 +71,11 @@ pub fn run(this: *VirtualMachine) Error!void {
 
 fn read(this: *VirtualMachine) Chunk.Instruction {
     defer this.ii += 1;
-    return this.chunk.read(this.ii);
+    return this.chunk.?.read(this.ii);
 }
 
 fn readConstant(this: *VirtualMachine) Value {
-    return this.chunk.getConstant(this.read().data);
+    return this.chunk.?.getConstant(this.read().data);
 }
 
 fn push(this: *VirtualMachine, value: Value) void {

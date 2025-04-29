@@ -9,7 +9,7 @@ pub fn main() !void {
     var chunk: Chunk = .init(allocator);
     defer chunk.deinit();
 
-    var vm: VirtualMachine = .new(&chunk);
+    var vm: VirtualMachine = .empty;
 
     // return -((1.2 + 3.4) / 5.6)
 
@@ -30,7 +30,5 @@ pub fn main() !void {
 
     try chunk.write(.{ .operation = .op_return }, 123);
 
-    //debug.disassembleChunk(chunk, "test chunk");
-
-    try vm.run();
+    try vm.run(&chunk);
 }
