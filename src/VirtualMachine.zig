@@ -3,6 +3,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Chunk = @import("Chunk.zig");
 const Value = @import("values.zig").Value;
+const Compiler = @import("Compiler.zig");
 const debug = @import("debug.zig");
 
 const max_stack_size = 256;
@@ -13,9 +14,8 @@ stack: [max_stack_size]Value,
 stack_size: usize,
 
 pub const Error = error{
-    CompileError,
     RuntimeError,
-};
+} || Compiler.Error;
 
 pub const empty: VirtualMachine = .{
     .chunk = null,
@@ -23,6 +23,13 @@ pub const empty: VirtualMachine = .{
     .stack = undefined,
     .stack_size = 0,
 };
+
+pub fn interpret(this: *VirtualMachine, source_code: []u8) Error!void {
+    _ = this;
+    var compiler: Compiler = .empty;
+
+    try compiler.compile(source_code);
+}
 
 pub fn run(this: *VirtualMachine, chunk: *Chunk) Error!void {
     this.chunk = chunk;
